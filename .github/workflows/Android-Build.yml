@@ -1,0 +1,71 @@
+name: APKSignatureKill-Build-Android
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'select branch to build(default: main)'
+        required: false
+        default: 'main'
+
+jobs:
+  signaturekiller_android_build:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: 17
+
+    - name: Download APKSignatureKill source code
+      run: |
+        cd ${{ github.workspace }}
+        git clone --branch ${{ github.event.inputs.branch || 'main' }} https://github.com/XDeathUserX/APKSignatureKill.git --recursive
+        cd APKSignatureKill
+        
+
+    - id: version
+      name: Get version
+      run: |
+        echo "date=$(/bin/date -u "+%Y%m%d")" >> $GITHUB_OUTPUT
+        cd ${{ github.workspace }}/APKSignatureKill
+        echo "hash=$(git log -1 --pretty=format:%H)" >> $GITHUB_OUTPUT
+        echo "short_hash=$(git describe --always --long)" >> $GITHUB_OUTPUT
+        echo "version=$(git describe --tags --always)" >> $GITHUB_OUTPUT
+
+    - name: Set up cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-signaturekiller-android-${{ steps.version.outputs.hash }}
+        restore-keys: |
+            ${{ runner.os }}-signaturekiller-android-
+
+   # - name: Prepare environment
+   #   run: |
+   #     sudo apt-get install -y ninja-build
+   #       ln -s /usr/bin/ninja .
+    - name: Build Android
+      run: |
+        cd ${{ github.workspace }}/APKSignatureKill/
+        chmod +x ./gradlew
+        ./gradlew "assembleRelease"
+        # bash gradlew build
+        mv $(find app/build/outputs/apk/release/ -type f | grep -E "\.apk$") ${{ github.workspace }}/signaturekiller-android-${{ steps.version.outputs.date }}-${{ steps.version.outputs.version }}.apk
+
+    - name: Release SignatureKiller (SignatureKiller-Android)
+      uses: softprops/action-gh-release@v2
+      with:
+        name: SignatureKiller ${{ steps.version.outputs.date }}
+        tag_name: SignatureKillerEx
+        files: ${{ github.workspace }}/signaturekiller-android-${{ steps.version.outputs.date }}-${{ steps.version.outputs.version }}.apk
+
+    - name: Release SignatureKiller ${{ steps.version.outputs.date }}
+      uses: softprops/action-gh-release@v2
+      with:
+        name: ${{ steps.version.outputs.date }}
+        tag_name: ${{ steps.version.outputs.date }}
+        files: ${{ github.workspace }}/signaturekiller-android-${{ steps.version.outputs.date }}-${{ steps.version.outputs.version }}.apk
